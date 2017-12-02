@@ -7,3 +7,5 @@ The Nodal Parent Constraint interface works almost identically to the standard M
 It does, however, have some limitations. As of the current version, you're unable to constrain an object to multiple drivers. It is possible to blend between two node-based constraints, but you would have to implement that manually, as the tool does not currently create such a system. Therefore, tool only works if you have exactly two objects selected: the driver, and the driven.
 
 If you want to remove a constraint, you'll need to use the node editor to graph the downstream or upstream connections of the driver or driven node, respectively. It's best practice to first disconnect the driven node from the system, and then delete the associated math nodes, therefore ensuring none of your values go haywire during the removal. If you try to recreate the parent constraint while the original math nodes still exist, the function will fail.
+
+For an explanation of the matrix math used, read Vasil Shotarov's article on bindpose.com: http://bindpose.com/maya-matrix-based-functions-part-1-node-based-matrix-constraint/
