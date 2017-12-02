@@ -1,8 +1,4 @@
 ### Nodal Parent Constraint Tool.
-# Tool provides a UI to create node based parent constraints using nodes and matrix math.
-# As with a standard parent constraint, select the driver first and the driven second.
-# In the current version, you cannot constrain an object to multiple drivers. A driven object can only accept a single driver via the tool.
-###
 
 import maya.cmds as cmds
 
