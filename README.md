@@ -8,4 +8,4 @@ It does, however, have some limitations. As of the current version, you're unabl
 
 If you want to remove a constraint, you'll need to use the node editor to graph the downstream or upstream connections of the driver or driven node, respectively. It's best practice to first disconnect the driven node from the system, and then delete the associated math nodes, therefore ensuring none of your values go haywire during the removal. If you try to recreate the parent constraint while the original math nodes still exist, the function will fail.
 
-For an explanation of the matrix math used, read Vasil Shotarov's article on bindpose.com: http://bindpose.com/maya-matrix-based-functions-part-1-node-based-matrix-constraint/
+For an explanation of the matrix math used, read the bindpose.com article by Vasil Shotarov that inspired this tool: http://bindpose.com/maya-matrix-based-functions-part-1-node-based-matrix-constraint/
