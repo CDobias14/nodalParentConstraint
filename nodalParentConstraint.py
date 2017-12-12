@@ -1,6 +1,9 @@
 ### Nodal Parent Constraint Tool.
 
 import maya.cmds as cmds
+import maya.api.OpenMaya as om2
+
+###------------------------------------------------------###
 
 def npcUI():
     # Check to see if the window already exists
@@ -91,8 +94,25 @@ def npcUI():
     
     # Show the window
     cmds.showWindow('npcUI')
-    
 
+###------------------------------------------------------###
+
+def getDagPath(node=None):
+    sel = om2.MSelectionList()
+    sel.add(node)
+    d = sel.getDagPath(0)
+    return d
+
+
+def getLocalOffset(parent, child):
+    print(parent)
+    print(child)
+    parentWorldMatrix = getDagPath(parent).inclusiveMatrix()
+    childWorldMatrix = getDagPath(child).inclusiveMatrix()
+    
+    return childWorldMatrix * parentWorldMatrix.inverse()
+
+###------------------------------------------------------###
 
 def nodalParentConstraint(mo, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     # Get the selected nodes
@@ -116,19 +136,8 @@ def nodalParentConstraint(mo, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     
     # Check for maintain offset, and calculate if True
     if mo == True:
-        # Get offset
-        cmds.connectAttr('{}.wim[0]'.format(sel[1]), '{}_mtxOffset.i[2]'.format(sel[1]), f = True)
-        cmds.shadingNode('multMatrix', asUtility = True, n = '{}_tempForOffset'.format(sel[1]))
-        cmds.connectAttr('{}.wm[0]'.format(sel[1]), '{}_tempForOffset.i[0]'.format(sel[1]), f = True)
-        cmds.connectAttr('{}.wim[0]'.format(sel[0]), '{}_tempForOffset.i[1]'.format(sel[1]), f = True)
-        offset = cmds.getAttr('{}_tempForOffset.o'.format(sel[1]))
-        
-        # Set offset
-        cmds.setAttr('{}_mtxOffset.i[0]'.format(sel[1]), offset, type = 'matrix')
-        
-        # Clean up (Delete temp node and reconnect the driven's parent inverse matrix)
-        cmds.delete('{}_tempForOffset'.format(sel[1]))
-        cmds.connectAttr('{}.pim[0]'.format(sel[1]), '{}_mtxOffset.i[2]'.format(sel[1]), f = True)
+        localOffset = getLocalOffset(sel[0], sel[1])
+        cmds.setAttr('{}_mtxOffset.matrixIn[0]'.format(sel[1]), localOffset, type = 'matrix')
     
     
     # Check if the driven node is a joint, and compensate if True
@@ -158,5 +167,6 @@ def nodalParentConstraint(mo, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
                 if var[1][axis[0]] == True:
                     cmds.connectAttr('{}{}'.format(var[2], axis[1]), '{}.{}{}'.format(sel[1], var[3], axis[2]), f = True)
 
+###------------------------------------------------------###
 
 npcUI()
