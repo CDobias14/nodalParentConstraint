@@ -105,8 +105,6 @@ def getDagPath(node=None):
 
 
 def getLocalOffset(parent, child):
-    print(parent)
-    print(child)
     parentWorldMatrix = getDagPath(parent).inclusiveMatrix()
     childWorldMatrix = getDagPath(child).inclusiveMatrix()
     
