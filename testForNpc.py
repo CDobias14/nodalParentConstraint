@@ -1,78 +1,93 @@
-### Test for an existing NPC
+### Test for existing NPCs
 
 import maya.cmds as cmds
 import maya.api.OpenMaya as om2
 
 ###------------------------------------------------------###
 
-# Gets the source of an MFnDep's attribute. If the inputAttr is an array, the desired index must be defined.
-# i:[MFnDependencyNode, string, *int]
+# Get the active selection as an MFnDependencyNode
+# i:[]
 # o:[MFnDependencyNode]
-def destination2Source(destDep, inputAttr, index = None):
-    plug = om2.MPlug(destDep.findPlug(inputAttr, False))
+def getActiveSel():
+    # Get selection
+    sel = om2.MGlobal.getActiveSelectionList()
+    
+    # Create an empty MObject
+    activeSelMob = None
+    
+    # Check for an existing selection. If there is, set activeSelMob equal to the existing selection.
+    if sel.length():
+        selActive = ((sel.length()) - 1)
+        activeSelMob = sel.getDependNode(selActive)
+        activeSelDep = om2.MFnDependencyNode(activeSelMob)
+        return(activeSelDep)
+    else:
+        print('No active selection')
+        return None
+
+
+# Get the source node of the given attribute. 
+# To check if the source is a certain type of node, set testName as the desired type of node.
+# To check if the source's name matches another, set testName as the desired node name, and set nodeName to True.
+# *If the attr is an array, the desired index must be defined.
+# i:[MFnDependencyNode, string, string, *int, *bool]
+# o:[(bool, MFnDependencyNode)]
+def checkSrcNode(input, attr, testName, index = None, nodeName = None):
+    # Get the MPlug of the given attribute.
+    plug = om2.MPlug(input.findPlug(attr, False))
     # If index was given, use to find source. Otherwise find source as usual.
     if index != None:
-        sourcePlug = plug.elementByPhysicalIndex(index).source()
+        sourcePlug = plug.elementByLogicalIndex(index).source()
     else:
         sourcePlug = plug.source()
     sourceMob = sourcePlug.node()
     sourceDep = om2.MFnDependencyNode(sourceMob)
-    return sourceDep
-
-# Checks if the objects are connected by an NPC for the given attribute.
-# i:[MFnDependencyNode, MFnDependencyNode, string]
-# o:[string]
-def test4npc(parent, child, inputAttr):
-    # Get the MPlug of the given child's attribute, and set its source node to an MFnDependencyNode.
-    childSourceDep = destination2Source(child, inputAttr)
     
-    # Continue if the source is a decomposeMatrix node.
-    if childSourceDep.typeName == 'decomposeMatrix':
-        decompSourceDep = destination2Source(childSourceDep, 'inputMatrix')
-        
-        # Continue if the source is a multMatrix node.
-        if decompSourceDep.typeName == 'multMatrix':
-            
-            # Continue if the source is the same as the parent.
-            if destination2Source(decompSourceDep, 'matrixIn', 1).name() == parent.name():
-                return inputAttr
+    if nodeName == True:
+        if sourceDep.name() == testName:
+            return (True, sourceDep)
+        else:
+            return (False, sourceDep)
+    
+    if sourceDep.typeName == testName:
+        return (True, sourceDep)
     else:
-        return
+        return (False, sourceDep)
 
-###------------------------------------------------------###
 
-# Get selection
-sel = om2.MGlobal.getActiveSelectionList()
-
-# Create empty MObjects
-parentMob = None
-childMob = None
-
-# Check that exactly two objects are selected. If there are, set them equal to the empty MObjects.
-if sel.length() == 2:
-    parentMob = sel.getDependNode(0)
-    childMob = sel.getDependNode(1)
-
-else:
-    print('Invalid Selection')
-
-# If the MObjects have been populated by the previous if statement, test for an existing NPC connection.
-if (parentMob is not None and childMob is not None):
-    # Create MFnDependencyNode objects from the selected MObjects
-    parentDep = om2.MFnDependencyNode(parentMob)
-    childDep = om2.MFnDependencyNode(childMob)
+# Tests the active selection for an existing NPC
+# i:[]
+# o:[None OR list[(string, string)]]
+def test4npc():
+    # Get the active selection
+    sel = getActiveSel()
+    if sel == None:
+        return None
+    if sel.typeName != 'transform':
+        return None
     
-    # Create an empty array for existing NPC connections
     existingNpcArray = []
     
-    # Test for any NPC connections
     for attr in ('translate', 'tx', 'ty', 'tz', 'rotate', 'rx', 'ry', 'rz', 'scale', 'sx', 'sy', 'sz'):
-        existingConnection = test4npc(parentDep, childDep, attr)
-        if existingConnection != None:
-            existingNpcArray.append(existingConnection)
+        # Check the source of the active selection's given attribute for a decomposeMatrix node
+        selSource = checkSrcNode(sel, attr, 'decomposeMatrix')
+        if selSource[0] == True:
+            # Check the source of the decomposeMatrix node's inputMatrix for a multMatrix node
+            decompSource = checkSrcNode(selSource[1], 'inputMatrix', 'multMatrix')
+            if decompSource[0] == True:
+                # Check that the source of the multMatrix node's matrixIn is the active selection
+                multSource = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 2, nodeName = True)
+                if multSource[0] == True:
+                    parent = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 1, nodeName = True)
+                    existingNpcArray.append((attr, parent[1].name()))
     
-    # If an NPC does exist, print what attributes are connected. Otherwise print that none exists.
-    if len(existingNpcArray) > 0:
-        print('NPC exists for the following attributes: {}'.format(existingNpcArray))
+    if existingNpcArray != None:
+        if len(existingNpcArray) == 0:
+            print('There are no NPC connections driving this transform node.')
+        else:
+            for connection in existingNpcArray:
+                print("This transform node's {} attribute is driven by {}".format(connection[0], connection[1]))
     else:
-        print('No NPC exists.')
+        print('The active selection is not a transform node.')
+    
+    return existingNpcArray
