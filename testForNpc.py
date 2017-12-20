@@ -1,4 +1,4 @@
-### Test for existing NPCs
+### Test for existing NPCs on the actively selected object
 
 import maya.cmds as cmds
 import maya.api.OpenMaya as om2
@@ -59,15 +59,22 @@ def checkSrcNode(input, attr, testName, index = None, nodeName = None):
 # i:[]
 # o:[None OR list[(string, string)]]
 def test4npc():
-    # Get the active selection
+    # Get the active selection as an MFnDependencyNode
     sel = getActiveSel()
+    
+    # Check that the active selection exists
     if sel == None:
         return None
+    
+    # Check that the active selection is a transform node
     if sel.typeName != 'transform':
+        print('The active selection is not a transform node.')
         return None
     
+    # Create an empty list to return
     existingNpcArray = []
     
+    # 
     for attr in ('translate', 'tx', 'ty', 'tz', 'rotate', 'rx', 'ry', 'rz', 'scale', 'sx', 'sy', 'sz'):
         # Check the source of the active selection's given attribute for a decomposeMatrix node
         selSource = checkSrcNode(sel, attr, 'decomposeMatrix')
@@ -81,13 +88,10 @@ def test4npc():
                     parent = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 1, nodeName = True)
                     existingNpcArray.append((attr, parent[1].name()))
     
-    if existingNpcArray != None:
-        if len(existingNpcArray) == 0:
-            print('There are no NPC connections driving this transform node.')
-        else:
-            for connection in existingNpcArray:
-                print("This transform node's {} attribute is driven by {}".format(connection[0], connection[1]))
+    if len(existingNpcArray) == 0:
+        print('There are no NPC connections driving this transform node.')
     else:
-        print('The active selection is not a transform node.')
+        for connection in existingNpcArray:
+            print("This transform node's {} attribute is driven by {}".format(connection[0], connection[1]))
     
     return existingNpcArray
