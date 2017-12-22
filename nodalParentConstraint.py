@@ -5,6 +5,9 @@ import maya.api.OpenMaya as om2
 
 ###------------------------------------------------------###
 
+# Creates the Nodal Parent Constraint User Interface (Window, buttons, etc.)
+# i:[]
+# o:[]
 def npcUI():
     # Check to see if the window already exists
     if cmds.window('npcUI', exists = True):
@@ -95,8 +98,10 @@ def npcUI():
     # Show the window
     cmds.showWindow('npcUI')
 
-###------------------------------------------------------###
 
+# Gets the MDagPath of the given string
+# i: [string]
+# o: [MDagPath]
 def getDagPath(node=None):
     sel = om2.MSelectionList()
     sel.add(node)
@@ -104,66 +109,204 @@ def getDagPath(node=None):
     return d
 
 
+# Gets the local offset between two given transform nodes based on their names.
+# i: [string, string]
+# o: [matrix]
 def getLocalOffset(parent, child):
     parentWorldMatrix = getDagPath(parent).inclusiveMatrix()
     childWorldMatrix = getDagPath(child).inclusiveMatrix()
     
     return childWorldMatrix * parentWorldMatrix.inverse()
 
-###------------------------------------------------------###
 
+# Get the active selection as an MFnDependencyNode
+# i:[]
+# o:[MFnDependencyNode]
+def getActiveSel():
+    # Get selection
+    sel = om2.MGlobal.getActiveSelectionList()
+    
+    # Create an empty MObject
+    activeSelMob = None
+    
+    # Check for an existing selection. If there is, set activeSelMob equal to the existing selection.
+    if sel.length():
+        selActive = ((sel.length()) - 1)
+        activeSelMob = sel.getDependNode(selActive)
+        activeSelDep = om2.MFnDependencyNode(activeSelMob)
+        return(activeSelDep)
+    else:
+        print('No active selection')
+        return None
+
+
+# Get the source node of the given attribute and check if it matches the given name or node type.
+# To check if the source is a certain type of node, set testName as the desired type of node.
+# To check if the source's name matches another, set testName as the desired node name, and set nodeName to True.
+# *If the attr is an array, the desired index must be defined.
+# i:[MFnDependencyNode, string, string, *int, *bool]
+# o:[(bool, MFnDependencyNode)]
+def checkSrcNode(input, attr, testName, index = None, nodeName = None):
+    # Get the MPlug of the given attribute.
+    plug = om2.MPlug(input.findPlug(attr, False))
+    # If index was given, use to find source. Otherwise find source as usual.
+    if index != None:
+        sourcePlug = plug.elementByLogicalIndex(index).source()
+    else:
+        sourcePlug = plug.source()
+    sourceMob = sourcePlug.node()
+    sourceDep = om2.MFnDependencyNode(sourceMob)
+    
+    if nodeName == True:
+        if sourceDep.name() == testName:
+            return (True, sourceDep)
+        else:
+            return (False, sourceDep)
+    
+    if sourceDep.typeName == testName:
+        return (True, sourceDep)
+    else:
+        return (False, sourceDep)
+
+
+# Tests the active selection for an existing NPC
+# i:[]
+# o:[list[(boolean, string)]]
+def test4npc():
+    # Get the active selection as an MFnDependencyNode
+    sel = getActiveSel()
+    
+    # Create an empty list to return
+    existingNpcArray = []
+    
+    # Append translate / rotate / scale attributes and their source transform node to the empty list if they are influencing the active selection.
+    for attr in ('t', 'tx', 'ty', 'tz', 'r', 'rx', 'ry', 'rz', 's', 'sx', 'sy', 'sz'):
+        # Check the source of the active selection's given attribute for a decomposeMatrix node
+        selSource = checkSrcNode(sel, attr, 'decomposeMatrix')
+        if selSource[0] == True:
+            # Check the source of the decomposeMatrix node's inputMatrix for a multMatrix node
+            decompSource = checkSrcNode(selSource[1], 'inputMatrix', 'multMatrix')
+            if decompSource[0] == True:
+                # Check that the source of the multMatrix node's matrixIn is the active selection
+                multSource = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 2, nodeName = True)
+                if multSource[0] == True:
+                    parent = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 1, nodeName = True)
+                    existingNpcArray.append((True, attr))
+                else:
+                    existingNpcArray.append((False, attr))
+            else:
+                existingNpcArray.append((False, attr))
+        else:
+            existingNpcArray.append((False, attr))
+    
+    return existingNpcArray
+
+
+# Creates a parent constraint between two selected transform nodes.
+# i: []
+# o: []
 def nodalParentConstraint(mo, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     # Get the selected nodes
     sel = cmds.ls(sl = True)
     
     # Check that exactly two nodes are selected
     if len(sel) != 2:
-        print("Must select exactly two nodes")
+        print('Must select exactly two nodes')
         return
     
-    # Create rotation output variable in case driven node is a joint
-    rOut = ('{}_mtx2srt.outputRotate'.format(sel[1]))
+    # Check that the nodes selected are transform nodes
+    for i in sel:
+        if cmds.nodeType(i) != 'transform':
+            if cmds.nodeType(i) != 'joint':
+                print('Must select two transform or joint nodes.')
+                return
+    
+    # Make a list of the translate / rotate / scale checkBox booleans
+    trsBools = []
+    for i in ((tAll, tXYZ), (rAll, rXYZ), (sAll, sXYZ)):
+        trsBools.append(i[0])
+        for xyz in i[1]:
+            trsBools.append(xyz)
+    
+    # Check for existing NPC connections that overlap with selected transforms.
+    transformBool = False
+    for iAttr, npcConnection in zip(trsBools, test4npc()):
+        if len(npcConnection[1]) == 1:
+            if iAttr == True:
+                transformBool = True
+            elif npcConnection[0] == True:
+                transformBool = True
+            else:
+                transformBool = False
+            if iAttr == True and iAttr == npcConnection[0]:
+                print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
+                return
+            else:
+                continue
+        
+        if iAttr == True and iAttr == npcConnection[0]:
+            print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
+            return
+        
+        if transformBool == True and transformBool == iAttr:
+            print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
+            return
+        
+        if transformBool == True and transformBool == npcConnection[0]:
+            print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
+            return
+    
+    # Create variables for the two selected nodes.
+    parent = sel[0]
+    child = sel[1]
+    
+    # Create a list of the transform input/output strings (The rotation outputs are long hand because decomposeMatrix abbreviates it to .or, while quatToEuler abbrevaites it to .ort).
+    trsIo = [('t', 'ot'), ('tx', 'otx'), ('ty', 'oty'), ('tz', 'otz'), ('r', 'outputRotate'), ('rx', 'outputRotateX'), ('ry', 'outputRotateY'), ('rz', 'outputRotateZ'), ('s', 'os'), ('sx', 'osx'), ('sy', 'osy'), ('sz', 'osz')]
+    
+    # Create a variable for reference to know if the driven node is a joint, and if so, check if rotations are being constrained.
+    isJnt = False
+    constrainRotate = False
+    if cmds.nodeType(child) == 'joint':
+        isJnt = True
+        for r in trsBools[4:7]:
+            if r == True:
+                constrainRotate = True
     
     # Create and connect multMatrix and decomposeMatrix nodes
-    cmds.shadingNode('decomposeMatrix', asUtility = True, n = '{}_mtx2srt'.format(sel[1]))
-    cmds.shadingNode('multMatrix', asUtility = True, n = '{}_mtxOffset'.format(sel[1]))
-    cmds.connectAttr('{}.wm[0]'.format(sel[0]), '{}_mtxOffset.i[1]'.format(sel[1]), f = True)
-    cmds.connectAttr('{}.pim[0]'.format(sel[1]), '{}_mtxOffset.i[2]'.format(sel[1]), f = True)
-    cmds.connectAttr('{}_mtxOffset.o'.format(sel[1]), '{}_mtx2srt.imat'.format(sel[1]), f = True)
-    
+    decompMtx = cmds.shadingNode('decomposeMatrix', asUtility = True, n = '{}_mtx2srt'.format(child))
+    multMtx = cmds.shadingNode('multMatrix', asUtility = True, n = '{}_mtxOffset'.format(child))
+    cmds.connectAttr('{}.wm[0]'.format(parent), '{}.i[1]'.format(multMtx), f = True)
+    cmds.connectAttr('{}.pim[0]'.format(child), '{}.i[2]'.format(multMtx), f = True)
+    cmds.connectAttr('{}.o'.format(multMtx), '{}.imat'.format(decompMtx), f = True)
     
     # Check for maintain offset, and calculate if True
     if mo == True:
-        localOffset = getLocalOffset(sel[0], sel[1])
-        cmds.setAttr('{}_mtxOffset.matrixIn[0]'.format(sel[1]), localOffset, type = 'matrix')
+        localOffset = getLocalOffset(parent, child)
+        cmds.setAttr('{}.matrixIn[0]'.format(multMtx), localOffset, type = 'matrix')
     
-    
-    # Check if the driven node is a joint, and compensate if True
-    if cmds.objectType(sel[1], i = 'joint'):
+    # Check if the driven node is a joint and if rotations are being constrained, and compensate if True
+    if isJnt == True and constrainRotate == True:
         # Create quaternion nodes
-        cmds.shadingNode('quatProd', asUtility = True, n = '{}_jointOrient_quatProd'.format(sel[1]))
-        cmds.shadingNode('quatInvert', asUtility = True, n = '{}_jointOrient_quatInvert'.format(sel[1]))
-        cmds.shadingNode('eulerToQuat', asUtility = True, n = '{}_jointOrient_euler2Quat'.format(sel[1]))
-        cmds.shadingNode('quatToEuler', asUtility = True, n = '{}_jointOrient_quat2Euler'.format(sel[1]))
+        quatProd = cmds.shadingNode('quatProd', asUtility = True, n = '{}_jointOrient_quatProd'.format(child))
+        quatInvert = cmds.shadingNode('quatInvert', asUtility = True, n = '{}_jointOrient_quatInvert'.format(child))
+        euler2Quat = cmds.shadingNode('eulerToQuat', asUtility = True, n = '{}_jointOrient_euler2Quat'.format(child))
+        quat2Euler = cmds.shadingNode('quatToEuler', asUtility = True, n = '{}_jointOrient_quat2Euler'.format(child))
         
         # Connect quaternion nodes
-        cmds.connectAttr('{}_mtx2srt.oq'.format(sel[1]), '{}_jointOrient_quatProd.iq1'.format(sel[1]), f = True)
-        cmds.connectAttr('{}_jointOrient_quatInvert.oq'.format(sel[1]), '{}_jointOrient_quatProd.iq2'.format(sel[1]), f = True)
-        cmds.connectAttr('{}_jointOrient_euler2Quat.oq'.format(sel[1]), '{}_jointOrient_quatInvert.iq'.format(sel[1]), f = True)
-        cmds.connectAttr('{}.jo'.format(sel[1]), '{}_jointOrient_euler2Quat.irt'.format(sel[1]), f = True)
-        cmds.connectAttr('{}_jointOrient_quatProd.oq'.format(sel[1]), '{}_jointOrient_quat2Euler.iq'.format(sel[1]), f = True)
-        
-        # Update rotation output variable
-        rOut = ('{}_jointOrient_quat2Euler.outputRotate'.format(sel[1]))
+        cmds.connectAttr('{}.oq'.format(decompMtx), '{}.iq1'.format(quatProd), f = True)
+        cmds.connectAttr('{}.oq'.format(quatInvert), '{}.iq2'.format(quatProd), f = True)
+        cmds.connectAttr('{}.oq'.format(euler2Quat), '{}.iq'.format(quatInvert), f = True)
+        cmds.connectAttr('{}.jo'.format(child), '{}.irt'.format(euler2Quat), f = True)
+        cmds.connectAttr('{}.oq'.format(quatProd), '{}.iq'.format(quat2Euler), f = True)
     
     # Connect all outputs to the driven node
-    for var in [(tAll, tXYZ, '{}_mtx2srt.outputTranslate'.format(sel[1]), 't'), (rAll, rXYZ, rOut, 'r'), (sAll, sXYZ, '{}_mtx2srt.outputScale'.format(sel[1]), 's')]:
-        if var[0] == True:
-            cmds.connectAttr('{}'.format(var[2]), '{}.{}'.format(sel[1], var[3]), f = True)
-        else:
-            for axis in [(0, 'X', 'x'), (1, 'Y', 'y'), (2, 'Z', 'z')]:
-                if var[1][axis[0]] == True:
-                    cmds.connectAttr('{}{}'.format(var[2], axis[1]), '{}.{}{}'.format(sel[1], var[3], axis[2]), f = True)
+    for bools, io in zip(trsBools, trsIo):
+        if bools == True:
+            if io[0][0] == 'r' and isJnt == True:
+                cmds.connectAttr('{}.{}'.format(quat2Euler, io[1]), '{}.{}'.format(child, io[0]), f = True)
+            else:
+                cmds.connectAttr('{}.{}'.format(decompMtx, io[1]), '{}.{}'.format(child, io[0]), f = True)
+    
 
 ###------------------------------------------------------###
 
