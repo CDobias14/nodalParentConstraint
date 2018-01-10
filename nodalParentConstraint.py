@@ -23,11 +23,20 @@ def npcUI():
     ###------------------###
     
     # Create moRow layout
-    moRow = cmds.rowLayout('moRow', nc = 2, cw = [(1, 100), (2, 260)])
+    moRow = cmds.rowLayout('moRow', nc = 2, cw = [(1, 183), (2, 177)])
     
     # Create maintain offset label and checkbox
-    cmds.text(l = 'Maintain offset:', w = 90, al = 'right', p = moRow)
+    cmds.text(l = 'Maintain offset:', w = 172, al = 'right', p = moRow)
     maintainOffset = cmds.checkBox('maintainOffset', l = '', p = moRow, v = True)
+    
+    ###------------------###
+    
+    # Create overrideExisting layout
+    oeRow = cmds.rowLayout('overrideExisting', nc = 2, cw = [(1, 183), (2, 177)], p = mainLayout)
+    
+    # Create Override Existing Connections label and checkbox
+    cmds.text(l = 'Override existing connections:', w = 172, al = 'right', p = oeRow)
+    overrideExisting = cmds.checkBox('overrideExisting', l = '', p = oeRow, v = False)
     
     ###------------------###
     
@@ -91,7 +100,7 @@ def npcUI():
     
     # Create constrain button
     cmds.separator(h = 15, p = mainLayout)
-    constrain = cmds.button('constrain', l = 'Constrain', p = mainLayout, h = 27, w = 360, c = 'nodalParentConstraint(cmds.checkBox("maintainOffset", q = True, v = True), cmds.checkBox("tAll", q = True, v = True), cmds.checkBoxGrp("tXYZ", q = True, va3 = True), cmds.checkBox("rAll", q = True, v = True), cmds.checkBoxGrp("rXYZ", q = True, va3 = True), cmds.checkBox("sAll", q = True, v = True), cmds.checkBoxGrp("sXYZ", q = True, va3 = True))')
+    constrain = cmds.button('constrain', l = 'Constrain', p = mainLayout, h = 27, w = 360, c = 'nodalParentConstraint(cmds.checkBox("maintainOffset", q = True, v = True), cmds.checkBox("overrideExisting", q = True, v = True), cmds.checkBox("tAll", q = True, v = True), cmds.checkBoxGrp("tXYZ", q = True, va3 = True), cmds.checkBox("rAll", q = True, v = True), cmds.checkBoxGrp("rXYZ", q = True, va3 = True), cmds.checkBox("sAll", q = True, v = True), cmds.checkBoxGrp("sXYZ", q = True, va3 = True))')
     
     ###------------------###
     
@@ -143,10 +152,12 @@ def getActiveSel():
 # Get the source node of the given attribute and check if it matches the given name or node type.
 # To check if the source is a certain type of node, set testName as the desired type of node.
 # To check if the source's name matches another, set testName as the desired node name, and set nodeName to True.
+# To check if the source exists, set exists to True. False will be returned if there is no source node, True will be returned if there is a source node.
+    # *When checking if there is a source node, an input is required for testName, but will have no effect on the output.
 # *If the attr is an array, the desired index must be defined.
-# i:[MFnDependencyNode, string, string, *int, *bool]
+# i:[MFnDependencyNode, string, string, *int, *bool, *bool]
 # o:[(bool, MFnDependencyNode)]
-def checkSrcNode(input, attr, testName, index = None, nodeName = None):
+def checkSrcNode(input, attr, testName, index = None, nodeName = None, exists = None):
     # Get the MPlug of the given attribute.
     plug = om2.MPlug(input.findPlug(attr, False))
     # If index was given, use to find source. Otherwise find source as usual.
@@ -157,16 +168,22 @@ def checkSrcNode(input, attr, testName, index = None, nodeName = None):
     sourceMob = sourcePlug.node()
     sourceDep = om2.MFnDependencyNode(sourceMob)
     
+    if exists == True:
+        if sourceDep.name() == 'NULL':
+            return(False, sourceDep)
+        else:
+            return(True, sourceDep)
+    
     if nodeName == True:
         if sourceDep.name() == testName:
-            return (True, sourceDep)
+            return(True, sourceDep)
         else:
-            return (False, sourceDep)
+            return(False, sourceDep)
     
     if sourceDep.typeName == testName:
-        return (True, sourceDep)
+        return(True, sourceDep)
     else:
-        return (False, sourceDep)
+        return(False, sourceDep)
 
 
 # Tests the active selection for an existing NPC
@@ -202,10 +219,32 @@ def test4npc():
     return existingNpcArray
 
 
+# Tests the active selection for incoming connections
+# i:[]
+# o:[list[(boolean, string)]]
+def test4connection():
+    # Get the active selection as an MFnDependencyNode
+    sel = getActiveSel()
+    
+    # Create an empty list to return
+    existingConnectionArray = []
+    
+    # Append translate / rotate / scale attributes and their source transform node to the empty list if they are influencing the active selection.
+    for attr in ('t', 'tx', 'ty', 'tz', 'r', 'rx', 'ry', 'rz', 's', 'sx', 'sy', 'sz'):
+        # Check if a source node exists for the given attribute of the active selection
+        selSource = checkSrcNode(sel, attr, '', exists = True)
+        if selSource[0] == True:
+            existingConnectionArray.append((True, attr))
+        else:
+            existingConnectionArray.append((False, attr))
+    
+    return existingConnectionArray
+
+
 # Creates a parent constraint between two selected transform nodes.
-# i: []
+# i: [bool, bool, bool, [bool, bool, bool], bool, [bool, bool, bool], bool, [bool, bool, bool], *args]
 # o: []
-def nodalParentConstraint(mo, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
+def nodalParentConstraint(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     # Get the selected nodes
     sel = cmds.ls(sl = True)
     
@@ -228,33 +267,34 @@ def nodalParentConstraint(mo, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
         for xyz in i[1]:
             trsBools.append(xyz)
     
-    # Check for existing NPC connections that overlap with selected transforms.
-    transformBool = False
-    for iAttr, npcConnection in zip(trsBools, test4npc()):
-        if len(npcConnection[1]) == 1:
-            if iAttr == True:
-                transformBool = True
-            elif npcConnection[0] == True:
-                transformBool = True
-            else:
-                transformBool = False
-            if iAttr == True and iAttr == npcConnection[0]:
-                print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
+    # If override = False, check for existing connections that overlap with selected transforms.
+    if override == False:
+        transformBool = False
+        for iAttr, existingConnection in zip(trsBools, test4connection()):
+            if len(existingConnection[1]) == 1:
+                if iAttr == True:
+                    transformBool = True
+                elif existingConnection[0] == True:
+                    transformBool = True
+                else:
+                    transformBool = False
+                if iAttr == True and iAttr == existingConnection[0]:
+                    print('The .{} attribute is already being driven by another connection'.format(existingConnection[1]))
+                    return
+                else:
+                    continue
+            
+            if iAttr == True and iAttr == existingConnection[0]:
+                print('The .{} attribute is already being driven by another connection'.format(existingConnection[1]))
                 return
-            else:
-                continue
-        
-        if iAttr == True and iAttr == npcConnection[0]:
-            print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
-            return
-        
-        if transformBool == True and transformBool == iAttr:
-            print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
-            return
-        
-        if transformBool == True and transformBool == npcConnection[0]:
-            print('The .{} attribute is already being driven by another NPC'.format(npcConnection[1]))
-            return
+            
+            if transformBool == True and transformBool == iAttr:
+                print('The .{} attribute is already being driven by another connection'.format(existingConnection[1]))
+                return
+            
+            if transformBool == True and transformBool == existingConnection[0]:
+                print('The .{} attribute is already being driven by another connection'.format(existingConnection[1]))
+                return
     
     # Create variables for the two selected nodes.
     parent = sel[0]
