@@ -157,7 +157,7 @@ def getActiveSel():
 # *If the attr is an array, the desired index must be defined.
 # i:[MFnDependencyNode, string, string, *int, *bool, *bool]
 # o:[(bool, MFnDependencyNode)]
-def checkSrcNode(input, attr, testName, index = None, nodeName = None, exists = None):
+def checkSrcNode(input, attr, testName, index = None, nodeName = False, exists = None):
     # Get the MPlug of the given attribute.
     plug = om2.MPlug(input.findPlug(attr, False))
     # If index was given, use to find source. Otherwise find source as usual.
@@ -196,27 +196,101 @@ def test4npc():
     # Create an empty list to return
     existingNpcArray = []
     
-    # Append translate / rotate / scale attributes and their source transform node to the empty list if they are influencing the active selection.
+    # Check to see if the source of each transform is from an NPC connection. Yes: Append (True, attr) to the list. No: Append (False, attr) to the list.
     for attr in ('t', 'tx', 'ty', 'tz', 'r', 'rx', 'ry', 'rz', 's', 'sx', 'sy', 'sz'):
         # Check the source of the active selection's given attribute for a decomposeMatrix node
         selSource = checkSrcNode(sel, attr, 'decomposeMatrix')
+        
         if selSource[0] == True:
             # Check the source of the decomposeMatrix node's inputMatrix for a multMatrix node
             decompSource = checkSrcNode(selSource[1], 'inputMatrix', 'multMatrix')
+            
             if decompSource[0] == True:
                 # Check that the source of the multMatrix node's matrixIn is the active selection
                 multSource = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 2, nodeName = True)
+            
                 if multSource[0] == True:
                     parent = checkSrcNode(decompSource[1], 'matrixIn', sel.name(), index = 1, nodeName = True)
                     existingNpcArray.append((True, attr))
+                
                 else:
                     existingNpcArray.append((False, attr))
+            
             else:
                 existingNpcArray.append((False, attr))
+        
         else:
             existingNpcArray.append((False, attr))
     
     return existingNpcArray
+
+
+# Tests the active selection for an existing NPC Blend
+# i:[]
+# o:[list[(boolean, string, int)]]
+def test4npcBlend():
+    
+    # Get the active selection as an MFnDependencyNode
+    sel = getActiveSel()
+    
+    # Create an empty list to return
+    existingNpcBlendArray = []
+    
+    # Checks the source node of each Matrix In attribute for a wtAddMatrix node
+    def checkWtSrc(input, testName, index):
+        # Get the MPlug of the given attribute.
+        plugArray = om2.MPlug(input.findPlug('wtMatrix', False))
+        plugParent = plugArray.elementByLogicalIndex(index)
+        plug = plugParent.child(0)
+        
+        # Get the MFnDependencyNode of the plug
+        sourcePlug = plug.source()
+        sourceMob = sourcePlug.node()
+        sourceDep = om2.MFnDependencyNode(sourceMob)
+        
+        # Check that the source node's type matches the given testName.
+        if sourceDep.typeName == testName:
+            return(True, sourceDep)
+        else:
+            return(False, sourceDep)
+    
+    # Counts a wtAddMatrix node's incoming Matrix In connections
+    def countDrivers(driverCount):
+        
+        if (checkWtSrc(decompSource[1], 'multMatrix', index = driverCount))[0] == False:
+            return(driverCount)
+        
+        else:
+            return(countDrivers(driverCount + 1))
+    
+    # Check to see if the source of each transform is from an NPC Blend connection. Yes: Append (True, attr, # of drivers) to the list. No: Append (False, attr, # of drivers) to the list.
+    for attr in ('t', 'tx', 'ty', 'tz', 'r', 'rx', 'ry', 'rz', 's', 'sx', 'sy', 'sz'):
+        
+        drivers = 0
+        
+        # Check the source of the active selection's given attribute for a decomposeMatrix node
+        selSource = checkSrcNode(sel, attr, 'decomposeMatrix')
+        
+        if selSource[0] == True:
+            decompSource = checkSrcNode(selSource[1], 'inputMatrix', 'wtAddMatrix')
+            
+            if decompSource[0] == True:
+                drivers = countDrivers(0)
+                print(type(drivers))
+                if drivers == 0:
+                    existingNpcBlendArray.append((False, attr, drivers))
+                
+                else:
+                    existingNpcBlendArray.append((True, attr, drivers))
+            
+            else:
+                existingNpcBlendArray.append((False, attr, drivers))
+        
+        else:
+            existingNpcBlendArray.append((False, attr, drivers))
+    
+    print(existingNpcBlendArray)
+    return existingNpcBlendArray
 
 
 # Tests the active selection for incoming connections
@@ -229,12 +303,14 @@ def test4connection():
     # Create an empty list to return
     existingConnectionArray = []
     
-    # Append translate / rotate / scale attributes and their source transform node to the empty list if they are influencing the active selection.
+    # Check to see if the source of each transform exists. Yes: Append (True, attr) to the list. No: Append (False, attr) to the list.
     for attr in ('t', 'tx', 'ty', 'tz', 'r', 'rx', 'ry', 'rz', 's', 'sx', 'sy', 'sz'):
         # Check if a source node exists for the given attribute of the active selection
         selSource = checkSrcNode(sel, attr, '', exists = True)
+        
         if selSource[0] == True:
             existingConnectionArray.append((True, attr))
+        
         else:
             existingConnectionArray.append((False, attr))
     
