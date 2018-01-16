@@ -100,7 +100,7 @@ def npcUI():
     
     # Create constrain button
     cmds.separator(h = 15, p = mainLayout)
-    constrain = cmds.button('constrain', l = 'Constrain', p = mainLayout, h = 27, w = 360, c = 'nodalParentConstraint(cmds.checkBox("maintainOffset", q = True, v = True), cmds.checkBox("overrideExisting", q = True, v = True), cmds.checkBox("tAll", q = True, v = True), cmds.checkBoxGrp("tXYZ", q = True, va3 = True), cmds.checkBox("rAll", q = True, v = True), cmds.checkBoxGrp("rXYZ", q = True, va3 = True), cmds.checkBox("sAll", q = True, v = True), cmds.checkBoxGrp("sXYZ", q = True, va3 = True))')
+    constrain = cmds.button('constrain', l = 'Constrain', p = mainLayout, h = 27, w = 360, c = 'createNpc(cmds.checkBox("maintainOffset", q = True, v = True), cmds.checkBox("overrideExisting", q = True, v = True), cmds.checkBox("tAll", q = True, v = True), cmds.checkBoxGrp("tXYZ", q = True, va3 = True), cmds.checkBox("rAll", q = True, v = True), cmds.checkBoxGrp("rXYZ", q = True, va3 = True), cmds.checkBox("sAll", q = True, v = True), cmds.checkBoxGrp("sXYZ", q = True, va3 = True))')
     
     ###------------------###
     
@@ -320,7 +320,7 @@ def test4connection():
 # Creates a parent constraint between two selected transform nodes.
 # i: [bool, bool, bool, [bool, bool, bool], bool, [bool, bool, bool], bool, [bool, bool, bool], *args]
 # o: []
-def nodalParentConstraint(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
+def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     # Get the selected nodes
     sel = cmds.ls(sl = True)
     
