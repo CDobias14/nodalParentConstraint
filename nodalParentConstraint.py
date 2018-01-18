@@ -100,7 +100,7 @@ def npcUI():
     
     # Create constrain button
     cmds.separator(h = 15, p = mainLayout)
-    constrain = cmds.button('constrain', l = 'Constrain', p = mainLayout, h = 27, w = 360, c = 'createNpc(cmds.checkBox("maintainOffset", q = True, v = True), cmds.checkBox("overrideExisting", q = True, v = True), cmds.checkBox("tAll", q = True, v = True), cmds.checkBoxGrp("tXYZ", q = True, va3 = True), cmds.checkBox("rAll", q = True, v = True), cmds.checkBoxGrp("rXYZ", q = True, va3 = True), cmds.checkBox("sAll", q = True, v = True), cmds.checkBoxGrp("sXYZ", q = True, va3 = True))')
+    constrain = cmds.button('constrain', l = 'Constrain', p = mainLayout, h = 27, w = 360, c = 'getUIValues()')
     
     ###------------------###
     
@@ -108,9 +108,25 @@ def npcUI():
     cmds.showWindow('npcUI')
 
 
+# Creates variables from all of the npcUI values, then runs the createNpc function with them.
+# i:[]
+# o:[]
+def getUIValues():
+    mo = cmds.checkBox("maintainOffset", q = True, v = True)
+    override = cmds.checkBox("overrideExisting", q = True, v = True)
+    tAll = cmds.checkBox("tAll", q = True, v = True)
+    tXYZ = cmds.checkBoxGrp("tXYZ", q = True, va3 = True)
+    rAll = cmds.checkBox("rAll", q = True, v = True)
+    rXYZ = cmds.checkBoxGrp("rXYZ", q = True, va3 = True)
+    sAll = cmds.checkBox("sAll", q = True, v = True)
+    sXYZ = cmds.checkBoxGrp("sXYZ", q = True, va3 = True)
+    
+    createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ)
+
+
 # Gets the MDagPath of the given string
-# i: [string]
-# o: [MDagPath]
+# i:[string]
+# o:[MDagPath]
 def getDagPath(node=None):
     sel = om2.MSelectionList()
     sel.add(node)
@@ -119,8 +135,8 @@ def getDagPath(node=None):
 
 
 # Gets the local offset between two given transform nodes based on their names.
-# i: [string, string]
-# o: [matrix]
+# i:[string, string]
+# o:[matrix]
 def getLocalOffset(parent, child):
     parentWorldMatrix = getDagPath(parent).inclusiveMatrix()
     childWorldMatrix = getDagPath(child).inclusiveMatrix()
@@ -318,8 +334,8 @@ def test4connection():
 
 
 # Creates a parent constraint between two selected transform nodes.
-# i: [bool, bool, bool, [bool, bool, bool], bool, [bool, bool, bool], bool, [bool, bool, bool], *args]
-# o: []
+# i:[bool, bool, bool, [bool, bool, bool], bool, [bool, bool, bool], bool, [bool, bool, bool], *args]
+# o:[]
 def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     # Get the selected nodes
     sel = cmds.ls(sl = True)
