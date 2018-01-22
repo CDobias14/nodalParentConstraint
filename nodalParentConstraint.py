@@ -391,6 +391,7 @@ def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     # Create a list of the transform input/output strings (The rotation outputs are long hand because decomposeMatrix abbreviates it to .or, while quatToEuler abbrevaites it to .ort).
     trsIo = [('t', 'ot'), ('tx', 'otx'), ('ty', 'oty'), ('tz', 'otz'), ('r', 'outputRotate'), ('rx', 'outputRotateX'), ('ry', 'outputRotateY'), ('rz', 'outputRotateZ'), ('s', 'os'), ('sx', 'osx'), ('sy', 'osy'), ('sz', 'osz')]
     
+    # Create a driver > driven connection between two selected nodes
     if len(sel) == 2:
         # Create variables for the two selected nodes.
         parent = sel[0]
@@ -442,6 +443,7 @@ def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
                 else:
                     cmds.connectAttr('{}.{}'.format(decompMtx, io[1]), '{}.{}'.format(child, io[0]), f = True)
     
+    # Create a blend setup for 2 or more drivers
     else:
         child = sel[-1]
         
@@ -465,7 +467,7 @@ def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
                 
                 # Check for maintain offset, and calculate if True
                 if mo == True:
-                    localOffset = getLocalOffset(parent, child)
+                    localOffset = getLocalOffset(s, child)
                     cmds.setAttr('{}.matrixIn[0]'.format(multMtx), localOffset, type = 'matrix')
                 
         
