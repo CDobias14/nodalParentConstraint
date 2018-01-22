@@ -341,8 +341,8 @@ def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
     sel = cmds.ls(sl = True)
     
     # Check that exactly two nodes are selected
-    if len(sel) != 2:
-        print('Must select exactly two nodes')
+    if len(sel) <= 1:
+        print('Must select two or more nodes')
         return
     
     # Check that the nodes selected are transform nodes
@@ -388,57 +388,91 @@ def createNpc(mo, override, tAll, tXYZ, rAll, rXYZ, sAll, sXYZ, *args):
                 print('The .{} attribute is already being driven by another connection'.format(existingConnection[1]))
                 return
     
-    # Create variables for the two selected nodes.
-    parent = sel[0]
-    child = sel[1]
-    
     # Create a list of the transform input/output strings (The rotation outputs are long hand because decomposeMatrix abbreviates it to .or, while quatToEuler abbrevaites it to .ort).
     trsIo = [('t', 'ot'), ('tx', 'otx'), ('ty', 'oty'), ('tz', 'otz'), ('r', 'outputRotate'), ('rx', 'outputRotateX'), ('ry', 'outputRotateY'), ('rz', 'outputRotateZ'), ('s', 'os'), ('sx', 'osx'), ('sy', 'osy'), ('sz', 'osz')]
     
-    # Create a variable for reference to know if the driven node is a joint, and if so, check if rotations are being constrained.
-    isJnt = False
-    constrainRotate = False
-    if cmds.nodeType(child) == 'joint':
-        isJnt = True
-        for r in trsBools[4:7]:
-            if r == True:
-                constrainRotate = True
-    
-    # Create and connect multMatrix and decomposeMatrix nodes
-    decompMtx = cmds.shadingNode('decomposeMatrix', asUtility = True, n = '{}_mtx2srt'.format(child))
-    multMtx = cmds.shadingNode('multMatrix', asUtility = True, n = '{}_mtxOffset'.format(child))
-    cmds.connectAttr('{}.wm[0]'.format(parent), '{}.i[1]'.format(multMtx), f = True)
-    cmds.connectAttr('{}.pim[0]'.format(child), '{}.i[2]'.format(multMtx), f = True)
-    cmds.connectAttr('{}.o'.format(multMtx), '{}.imat'.format(decompMtx), f = True)
-    
-    # Check for maintain offset, and calculate if True
-    if mo == True:
-        localOffset = getLocalOffset(parent, child)
-        cmds.setAttr('{}.matrixIn[0]'.format(multMtx), localOffset, type = 'matrix')
-    
-    # Check if the driven node is a joint and if rotations are being constrained, and compensate if True
-    if isJnt == True and constrainRotate == True:
-        # Create quaternion nodes
-        quatProd = cmds.shadingNode('quatProd', asUtility = True, n = '{}_jointOrient_quatProd'.format(child))
-        quatInvert = cmds.shadingNode('quatInvert', asUtility = True, n = '{}_jointOrient_quatInvert'.format(child))
-        euler2Quat = cmds.shadingNode('eulerToQuat', asUtility = True, n = '{}_jointOrient_euler2Quat'.format(child))
-        quat2Euler = cmds.shadingNode('quatToEuler', asUtility = True, n = '{}_jointOrient_quat2Euler'.format(child))
+    if len(sel) == 2:
+        # Create variables for the two selected nodes.
+        parent = sel[0]
+        child = sel[1]
         
-        # Connect quaternion nodes
-        cmds.connectAttr('{}.oq'.format(decompMtx), '{}.iq1'.format(quatProd), f = True)
-        cmds.connectAttr('{}.oq'.format(quatInvert), '{}.iq2'.format(quatProd), f = True)
-        cmds.connectAttr('{}.oq'.format(euler2Quat), '{}.iq'.format(quatInvert), f = True)
-        cmds.connectAttr('{}.jo'.format(child), '{}.irt'.format(euler2Quat), f = True)
-        cmds.connectAttr('{}.oq'.format(quatProd), '{}.iq'.format(quat2Euler), f = True)
+        # Create a variable for reference to know if the driven node is a joint, and if so, check if rotations are being constrained.
+        isJnt = False
+        constrainRotate = False
+        if cmds.nodeType(child) == 'joint':
+            isJnt = True
+            for r in trsBools[4:7]:
+                if r == True:
+                    constrainRotate = True
+        
+        # Create multMatrix and decomposeMatrix nodes
+        multMtx = cmds.shadingNode('multMatrix', asUtility = True, n = '{}_mtxOffset'.format(child))
+        decompMtx = cmds.shadingNode('decomposeMatrix', asUtility = True, n = '{}_mtx2srt'.format(child))
+        
+        # Connect multMatrix and decomposeMatrix nodes
+        cmds.connectAttr('{}.wm[0]'.format(parent), '{}.i[1]'.format(multMtx), f = True)
+        cmds.connectAttr('{}.pim[0]'.format(child), '{}.i[2]'.format(multMtx), f = True)
+        cmds.connectAttr('{}.o'.format(multMtx), '{}.imat'.format(decompMtx), f = True)
+        
+        # Check for maintain offset, and calculate if True
+        if mo == True:
+            localOffset = getLocalOffset(parent, child)
+            cmds.setAttr('{}.matrixIn[0]'.format(multMtx), localOffset, type = 'matrix')
+        
+        # Check if the driven node is a joint and if rotations are being constrained, and compensate if True
+        if isJnt == True and constrainRotate == True:
+            # Create quaternion nodes
+            quatProd = cmds.shadingNode('quatProd', asUtility = True, n = '{}_jointOrient_quatProd'.format(child))
+            quatInvert = cmds.shadingNode('quatInvert', asUtility = True, n = '{}_jointOrient_quatInvert'.format(child))
+            euler2Quat = cmds.shadingNode('eulerToQuat', asUtility = True, n = '{}_jointOrient_euler2Quat'.format(child))
+            quat2Euler = cmds.shadingNode('quatToEuler', asUtility = True, n = '{}_jointOrient_quat2Euler'.format(child))
+            
+            # Connect quaternion nodes
+            cmds.connectAttr('{}.oq'.format(decompMtx), '{}.iq1'.format(quatProd), f = True)
+            cmds.connectAttr('{}.oq'.format(quatInvert), '{}.iq2'.format(quatProd), f = True)
+            cmds.connectAttr('{}.oq'.format(euler2Quat), '{}.iq'.format(quatInvert), f = True)
+            cmds.connectAttr('{}.jo'.format(child), '{}.irt'.format(euler2Quat), f = True)
+            cmds.connectAttr('{}.oq'.format(quatProd), '{}.iq'.format(quat2Euler), f = True)
+        
+        # Connect all outputs to the driven node
+        for bools, io in zip(trsBools, trsIo):
+            if bools == True:
+                if io[0][0] == 'r' and isJnt == True:
+                    cmds.connectAttr('{}.{}'.format(quat2Euler, io[1]), '{}.{}'.format(child, io[0]), f = True)
+                else:
+                    cmds.connectAttr('{}.{}'.format(decompMtx, io[1]), '{}.{}'.format(child, io[0]), f = True)
     
-    # Connect all outputs to the driven node
-    for bools, io in zip(trsBools, trsIo):
-        if bools == True:
-            if io[0][0] == 'r' and isJnt == True:
-                cmds.connectAttr('{}.{}'.format(quat2Euler, io[1]), '{}.{}'.format(child, io[0]), f = True)
+    else:
+        child = sel[-1]
+        
+        # Create and connect the wtAddMatrix and decomposeMatrix nodes
+        mtxBlend = cmds.shadingNode('wtAddMatrix', asUtility = True, n = '{}_mtxBlend'.format(child))
+        decompMtx = cmds.shadingNode('decomposeMatrix', asUtility = True, n = '{}_mtx2srt'.format(child))
+        cmds.connectAttr('{}.o'.format(mtxBlend), '{}.imat'.format(decompMtx), f = True)
+        
+        for s, i in zip(sel, range(len(sel))):
+            if s == child:
+                print('This is the child')
+                continue
             else:
+                # Create a multMatrix node
+                multMtx = cmds.shadingNode('multMatrix', asUtility = True, n = '{}_mtxOffset{}'.format(child, i))
+                
+                # Connect the driver, multMtx, and mtxBlend nodes
+                cmds.connectAttr('{}.wm[0]'.format(s), '{}.i[1]'.format(multMtx), f = True)
+                cmds.connectAttr('{}.pim[0]'.format(child), '{}.i[2]'.format(multMtx), f = True)
+                cmds.connectAttr('{}.o'.format(multMtx), '{}.i[{}].m'.format(mtxBlend, i), f = True)
+                
+                # Check for maintain offset, and calculate if True
+                if mo == True:
+                    localOffset = getLocalOffset(parent, child)
+                    cmds.setAttr('{}.matrixIn[0]'.format(multMtx), localOffset, type = 'matrix')
+                
+        
+        # Connect all outputs to the driven node
+        for bools, io in zip(trsBools, trsIo):
+            if bools == True:
                 cmds.connectAttr('{}.{}'.format(decompMtx, io[1]), '{}.{}'.format(child, io[0]), f = True)
-    
 
 ###------------------------------------------------------###
 
